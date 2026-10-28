@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kamera su prožektoriumi</title>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <style>
+    body { margin:0; background:#0f172a; color:white; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; justify-content:space-between; align-items:center; padding:15px; box-sizing:border-box;}
+    #video { width:100%; max-width:400px; height:68vh; object-fit:cover; border-radius:12px; border:2px solid #3b82f6; background:#000; }
+    .btn { width:100%; max-width:400px; padding:15px; border-radius:10px; border:none; font-size:16px; font-weight:bold; cursor:pointer; display:flex; justify-content:center; align-items:center; gap:8px;}
+    .btn-capture { background:#10b981; color:white; }
+    .btn-torch { background:transparent; border:1px solid #fbbf24; color:#fbbf24; padding:8px 16px; width:auto; margin-bottom:10px;}
+  </style>
+</head>
+<body>
+  <div style="width:100%; max-width:400px; display:flex; justify-content:space-between; align-items:center;">
+    <span>IMEI Skenavimas</span>
+    <button id="torch-btn" class="btn btn-torch" onclick="toggleTorch()">
+      <span class="material-symbols-outlined">lightbulb</span> Prožektorius
+    </button>
+  </div>
+
+  <video id="video" autoplay playsinline muted></video>
+
+  <button class="btn btn-capture" onclick="takePhoto()">
+    <span class="material-symbols-outlined">camera</span> Fiksuoti
+  </button>
+
+  <script>
+    let track = null;
+    let isTorch = false;
+
+    // ČIA NARŠYKLĖ IŠKART IŠMES NORMALIŲ LEIDIMŲ POPUP'Ą
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+      .then(stream => {
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+        track = stream.getVideoTracks()[0];
+        
+        // Pabandome iškart įjungti prožektorių
+        setTimeout(() => toggleTorch(true), 500);
+      })
+      .catch(err => {
+        alert("Klaida pasiekiant kamerą: " + err.message);
+      });
+
+    async function toggleTorch(force = null) {
+      if (!track) return;
+      isTorch = force !== null ? force : !isTorch;
+      try {
+        await track.applyConstraints({ advanced: [{ torch: isTorch }] });
+        document.getElementById('torch-btn').style.background = isTorch ? '#fbbf24' : 'transparent';
+        document.getElementById('torch-btn').style.color = isTorch ? '#000' : '#fbbf24';
+      } catch(e) {
+        console.log("Prožektorius nepalaikomas:", e);
+      }
+    }
+
+    function takePhoto() {
+      const video = document.getElementById('video');
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+
+      const base64Image = canvas.toDataURL('image/jpeg', 0.95);
+
+      // Nusiunčiame nuotrauką atgal į pagrindinį Google Apps Script langą
+      if (window.opener) {
+        window.opener.postMessage({ type: 'CAMERA_IMAGE', data: base64Image }, '*');
+        window.close(); // Uždaryti kameros langą
+      } else {
+        alert("Nepavyko perduoti nuotraukos atgal.");
+      }
+    }
+  </script>
+</body>
+</html>
