@@ -21,6 +21,7 @@
       flex-direction: column;
     }
 
+    /* 1. VIRŠUS: Valdymas */
     .top-bar {
       flex: 0 0 54px;
       display: flex;
@@ -65,6 +66,7 @@
       border-color: #3b82f6;
     }
 
+    /* 2. CENTRAS: Kamera ir Taikiklis */
     .camera-container {
       flex: 1 1 auto;
       position: relative;
@@ -82,12 +84,13 @@
       object-fit: cover;
     }
 
+    /* TAIKIKLIS SU STABILUMO BŪSENOMIS */
     .target-box {
       position: absolute;
       width: 82%;
       max-width: 340px;
       height: 28%;
-      border: 2px dashed #60a5fa;
+      border: 2px dashed #3b82f6;
       border-radius: 12px;
       box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
       pointer-events: none;
@@ -95,18 +98,45 @@
       flex-direction: column;
       justify-content: space-between;
       align-items: center;
-      padding: 6px;
+      padding: 8px;
       z-index: 5;
+      transition: border-color 0.2s ease;
+    }
+
+    /* Kai telefonas stabilus – žalia spalva */
+    .target-box.stable {
+      border-color: #10b981 !important;
+      border-style: solid !important;
+    }
+
+    .target-box.stable .corner {
+      border-color: #10b981 !important;
     }
 
     .target-text {
       color: #93c5fd;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       text-shadow: 0 1px 3px rgba(0,0,0,0.9);
       letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: color 0.2s ease;
     }
 
+    .target-box.stable .target-text {
+      color: #34d399 !important;
+    }
+
+    .corner {
+      width: 14px;
+      height: 14px;
+      border-color: #3b82f6;
+      transition: border-color 0.2s ease;
+    }
+
+    /* ZOOM MYGTUKAI */
     .zoom-bar {
       position: absolute;
       bottom: 12px;
@@ -139,6 +169,7 @@
       color: #fff;
     }
 
+    /* 3. APAČIA: Mygtukas */
     .bottom-bar {
       flex: 0 0 84px;
       display: flex;
@@ -175,9 +206,9 @@
       background: #059669;
     }
 
-    .btn-capture:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
+    .btn-capture.waiting {
+      background: #f59e0b !important;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35) !important;
     }
 
     .focus-ring {
@@ -196,6 +227,7 @@
 </head>
 <body>
 
+  <!-- VIRŠUS -->
   <div class="top-bar">
     <div class="tool-group">
       <button id="torch-btn" class="tool-btn" onclick="toggleTorch()">
@@ -210,21 +242,29 @@
     </div>
   </div>
 
+  <!-- CENTRAS -->
   <div class="camera-container" id="camera-container" onclick="handleTapToFocus(event)">
     <video id="video" autoplay playsinline muted></video>
     
+    <!-- Taikiklis su būsenos tekstu -->
     <div class="target-box" id="target-box">
       <div style="width:100%; display:flex; justify-content:space-between;">
-        <span style="border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6; width: 14px; height: 14px;"></span>
-        <span style="border-top: 2px solid #3b82f6; border-right: 2px solid #3b82f6; width: 14px; height: 14px;"></span>
+        <span class="corner" style="border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6;"></span>
+        <span class="corner" style="border-top: 2px solid #3b82f6; border-right: 2px solid #3b82f6;"></span>
       </div>
-      <span class="target-text">Nutaikykite į IMEI kodą</span>
+      
+      <span class="target-text" id="target-text">
+        <span class="material-symbols-outlined" style="font-size:15px;">vibration</span>
+        Stabilizuokite ranką...
+      </span>
+
       <div style="width:100%; display:flex; justify-content:space-between;">
-        <span style="border-bottom: 2px solid #3b82f6; border-left: 2px solid #3b82f6; width: 14px; height: 14px;"></span>
-        <span style="border-bottom: 2px solid #3b82f6; border-right: 2px solid #3b82f6; width: 14px; height: 14px;"></span>
+        <span class="corner" style="border-bottom: 2px solid #3b82f6; border-left: 2px solid #3b82f6;"></span>
+        <span class="corner" style="border-bottom: 2px solid #3b82f6; border-right: 2px solid #3b82f6;"></span>
       </div>
     </div>
 
+    <!-- Zoom mygtukai (1x, 2x, 3x) -->
     <div class="zoom-bar" id="zoom-bar" style="display:none;">
       <button class="btn-zoom active" id="zoom-1x" onclick="setZoom(1, event)">1x</button>
       <button class="btn-zoom" id="zoom-2x" onclick="setZoom(2, event)">2x</button>
@@ -234,8 +274,9 @@
     <div class="focus-ring" id="focus-ring"></div>
   </div>
 
+  <!-- APAČIA -->
   <div class="bottom-bar">
-    <button id="btn-capture" class="btn-capture" onclick="captureAndCrop()">
+    <button id="btn-capture" class="btn-capture" onclick="requestCapture()">
       <span class="material-symbols-outlined" style="font-size:24px;">photo_camera</span>
       <span id="capture-label">Fiksuoti IMEI</span>
     </button>
@@ -248,7 +289,15 @@
     let isTorch = false;
     let isAntiGlare = false;
 
-    // Saugus paleidimas be kietų 'min' parametrų
+    // DREBĖJIMO / STABILUMO KINTAMIEJI
+    let isStable = false;
+    let lastMotionMagnitude = 0;
+    let stableStartTime = 0;
+    let captureRequested = false;
+    const MOTION_THRESHOLD = 0.55; // Jautrumo slenkstis (m/s²)
+    const REQUIRED_STABLE_MS = 200; // Kiek ms ranka turi nejudėti
+
+    // 1. Paleidžiame kamerą
     navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: "environment" },
@@ -276,11 +325,193 @@
         if (maxZ < 2) document.getElementById('zoom-2x').style.display = 'none';
         if (maxZ < 3) document.getElementById('zoom-3x').style.display = 'none';
       }
+
+      // Paleidžiame drebėjimo stebėjimą
+      initStabilitySensor();
     })
     .catch(err => {
       alert("Klaida pasiekiant kamerą: " + err.message);
     });
 
+    // 2. AKSILEROMETRO / DREBĖJIMO FILTRAS
+    function initStabilitySensor() {
+      let lastGrav = null;
+
+      window.addEventListener('devicemotion', (e) => {
+        let mag = 0;
+
+        // Jei yra tikrasis akseleracijos vektorius (be gravitacijos)
+        if (e.acceleration && e.acceleration.x !== null) {
+          mag = Math.sqrt(
+            Math.pow(e.acceleration.x, 2) +
+            Math.pow(e.acceleration.y, 2) +
+            Math.pow(e.acceleration.z, 2)
+          );
+        } else if (e.accelerationIncludingGravity) {
+          // Fallback: apskaičiuojame gravitacijos vektoriaus pokyčio greitį
+          const g = e.accelerationIncludingGravity;
+          if (lastGrav) {
+            mag = Math.sqrt(
+              Math.pow(g.x - lastGrav.x, 2) +
+              Math.pow(g.y - lastGrav.y, 2) +
+              Math.pow(g.z - lastGrav.z, 2)
+            );
+          }
+          lastGrav = { x: g.x, y: g.y, z: g.z };
+        }
+
+        const now = Date.now();
+
+        // Jei viršytas judesio slenkstis – ranka virpa
+        if (mag > MOTION_THRESHOLD) {
+          stableStartTime = now;
+          if (isStable) {
+            isStable = false;
+            updateStabilityUI(false);
+          }
+        } else {
+          // Jei rami būsena trunka bent REQUIRED_STABLE_MS
+          if (!isStable && (now - stableStartTime) >= REQUIRED_STABLE_MS) {
+            isStable = true;
+            updateStabilityUI(true);
+
+            // Jei vartotojas jau paspaudė mygtuką ir laukia stabilaus momento
+            if (captureRequested) {
+              captureRequested = false;
+              executeCapture();
+            }
+          }
+        }
+      }, { passive: true });
+    }
+
+    function updateStabilityUI(stable) {
+      const targetBox = document.getElementById('target-box');
+      const targetText = document.getElementById('target-text');
+
+      if (stable) {
+        targetBox.classList.add('stable');
+        targetText.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">check_circle</span> Paruošta (Stabilu)';
+      } else {
+        targetBox.classList.remove('stable');
+        targetText.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">vibration</span> Stabilizuokite ranką...';
+      }
+    }
+
+    // 3. IŠMANUSIS MYGTUKO PASPAUDIMAS
+    function requestCapture() {
+      // Ryšio patikrinimas prieš pradedant
+      if (!window.opener || window.opener.closed) {
+        alert("Ryšys su pagrindine programa nutrūko. Uždarykite šį langą ir atidarykite iš naujo iš programos.");
+        return;
+      }
+
+      // Jei ranka jau stabili – fotografuojame akimirksniu
+      if (isStable) {
+        executeCapture();
+        return;
+      }
+
+      // Jei ranka dar virpa – laukiame stabilumo
+      captureRequested = true;
+      const btn = document.getElementById('btn-capture');
+      const label = document.getElementById('capture-label');
+      btn.classList.add('waiting');
+      label.innerText = 'Laukiama stabilumo...';
+
+      // Saugiklis: jei per 2 sekundes telefonas nesustojo, vis tiek fiksuojame
+      setTimeout(() => {
+        if (captureRequested) {
+          captureRequested = false;
+          executeCapture();
+        }
+      }, 2000);
+    }
+
+    // 4. KADRO FIKSAVIMAS IR APDIRBIMAS
+    async function executeCapture() {
+      const btn = document.getElementById('btn-capture');
+      const label = document.getElementById('capture-label');
+      btn.disabled = true;
+      btn.classList.remove('waiting');
+      label.innerText = 'Kerpama ir siunčiama...';
+
+      try {
+        let sourceImg = null;
+
+        if (imageCapture) {
+          try {
+            const photoBlob = await imageCapture.takePhoto({ imageWidth: 1920, imageHeight: 1080 });
+            sourceImg = await createImageBitmap(photoBlob);
+          } catch(e) {
+            console.warn("ImageCapture nepavyko, imamas video kadras:", e);
+          }
+        }
+
+        if (!sourceImg) {
+          const video = document.getElementById('video');
+          const vCanvas = document.createElement('canvas');
+          vCanvas.width = video.videoWidth;
+          vCanvas.height = video.videoHeight;
+          const vCtx = vCanvas.getContext('2d');
+          vCtx.drawImage(video, 0, 0);
+          sourceImg = await createImageBitmap(vCanvas);
+        }
+
+        // Taikiklio koordinačių apskaičiavimas
+        const videoEl = document.getElementById('video');
+        const targetEl = document.getElementById('target-box');
+
+        const vRect = videoEl.getBoundingClientRect();
+        const tRect = targetEl.getBoundingClientRect();
+
+        const imgW = sourceImg.width;
+        const imgH = sourceImg.height;
+
+        const scale = Math.max(vRect.width / imgW, vRect.height / imgH);
+        const displayedW = imgW * scale;
+        const displayedH = imgH * scale;
+
+        const offsetX = (vRect.width - displayedW) / 2;
+        const offsetY = (vRect.height - displayedH) / 2;
+
+        let cropX = (tRect.left - vRect.left - offsetX) / scale;
+        let cropY = (tRect.top - vRect.top - offsetY) / scale;
+        let cropW = tRect.width / scale;
+        let cropH = tRect.height / scale;
+
+        const padX = cropW * 0.15;
+        const padY = cropH * 0.15;
+
+        cropX = Math.max(0, cropX - padX);
+        cropY = Math.max(0, cropY - padY);
+        cropW = Math.min(imgW - cropX, cropW + padX * 2);
+        cropH = Math.min(imgH - cropY, cropH + padY * 2);
+
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = cropW;
+        cropCanvas.height = cropH;
+        const cropCtx = cropCanvas.getContext('2d');
+
+        cropCtx.drawImage(
+          sourceImg,
+          cropX, cropY, cropW, cropH,
+          0, 0, cropW, cropH
+        );
+
+        const croppedBase64 = cropCanvas.toDataURL('image/jpeg', 0.92);
+
+        window.opener.postMessage({ type: 'CAMERA_IMAGE', data: croppedBase64 }, '*');
+        window.close();
+
+      } catch (err) {
+        alert("Klaida apdorojant kadrą: " + err.message);
+        btn.disabled = false;
+        label.innerText = 'Fiksuoti IMEI';
+      }
+    }
+
+    // 5. Pagalbinės funkcijos (Prožektorius, Atspindžiai, Zoom, Fokusas)
     async function toggleTorch() {
       if (!track || !capabilities.torch) {
         alert("Šio įrenginio kamera nepalaiko prožektoriaus.");
@@ -290,9 +521,7 @@
       try {
         await track.applyConstraints({ advanced: [{ torch: isTorch }] });
         document.getElementById('torch-btn').classList.toggle('active-torch', isTorch);
-      } catch (e) {
-        console.warn("Torch klaida:", e);
-      }
+      } catch (e) {}
     }
 
     async function toggleAntiGlare() {
@@ -340,96 +569,6 @@
 
       if (track && capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
         track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(()=>{});
-      }
-    }
-
-    async function captureAndCrop() {
-      const btn = document.getElementById('btn-capture');
-      const label = document.getElementById('capture-label');
-      btn.disabled = true;
-      label.innerText = 'Kerpama ir apdorojama...';
-
-      try {
-        let sourceImg = null;
-
-        // 1. Pilnos raiškos sensoriaus nuotrauka
-        if (imageCapture) {
-          try {
-            const photoBlob = await imageCapture.takePhoto();
-            sourceImg = await createImageBitmap(photoBlob);
-          } catch(e) {
-            console.warn("ImageCapture nepavyko, imamas video kadras:", e);
-          }
-        }
-
-        // Atsarginis: video karkaso kadras
-        if (!sourceImg) {
-          const video = document.getElementById('video');
-          const vCanvas = document.createElement('canvas');
-          vCanvas.width = video.videoWidth;
-          vCanvas.height = video.videoHeight;
-          const vCtx = vCanvas.getContext('2d');
-          vCtx.drawImage(video, 0, 0);
-          sourceImg = await createImageBitmap(vCanvas);
-        }
-
-        // 2. Apkirpimas pagal taikiklį
-        const videoEl = document.getElementById('video');
-        const targetEl = document.getElementById('target-box');
-
-        const vRect = videoEl.getBoundingClientRect();
-        const tRect = targetEl.getBoundingClientRect();
-
-        const imgW = sourceImg.width;
-        const imgH = sourceImg.height;
-
-        const scale = Math.max(vRect.width / imgW, vRect.height / imgH);
-        const displayedW = imgW * scale;
-        const displayedH = imgH * scale;
-
-        const offsetX = (vRect.width - displayedW) / 2;
-        const offsetY = (vRect.height - displayedH) / 2;
-
-        let cropX = (tRect.left - vRect.left - offsetX) / scale;
-        let cropY = (tRect.top - vRect.top - offsetY) / scale;
-        let cropW = tRect.width / scale;
-        let cropH = tRect.height / scale;
-
-        // +15% saugos atsarga
-        const padX = cropW * 0.15;
-        const padY = cropH * 0.15;
-
-        cropX = Math.max(0, cropX - padX);
-        cropY = Math.max(0, cropY - padY);
-        cropW = Math.min(imgW - cropX, cropW + padX * 2);
-        cropH = Math.min(imgH - cropY, cropH + padY * 2);
-
-        const cropCanvas = document.createElement('canvas');
-        cropCanvas.width = cropW;
-        cropCanvas.height = cropH;
-        const cropCtx = cropCanvas.getContext('2d');
-
-        cropCtx.drawImage(
-          sourceImg,
-          cropX, cropY, cropW, cropH,
-          0, 0, cropW, cropH
-        );
-
-        const croppedBase64 = cropCanvas.toDataURL('image/jpeg', 0.95);
-
-        if (window.opener) {
-          window.opener.postMessage({ type: 'CAMERA_IMAGE', data: croppedBase64 }, '*');
-          window.close();
-        } else {
-          alert("Ryšio klaida su pagrindine programa.");
-          btn.disabled = false;
-          label.innerText = 'Fiksuoti IMEI';
-        }
-
-      } catch (err) {
-        alert("Klaida apdorojant kadrą: " + err.message);
-        btn.disabled = false;
-        label.innerText = 'Fiksuoti IMEI';
       }
     }
   </script>
