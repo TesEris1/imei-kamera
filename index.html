@@ -21,7 +21,6 @@
       flex-direction: column;
     }
 
-    /* 1. VIRŠUS: Valdymo mygtukai */
     .top-bar {
       flex: 0 0 54px;
       display: flex;
@@ -66,7 +65,6 @@
       border-color: #3b82f6;
     }
 
-    /* 2. CENTRAS: Kameros vaizdas ir Taikiklis */
     .camera-container {
       flex: 1 1 auto;
       position: relative;
@@ -84,7 +82,6 @@
       object-fit: cover;
     }
 
-    /* TAIKIKLIS (Pagal šį rėmelį bus atliekamas CROP) */
     .target-box {
       position: absolute;
       width: 82%;
@@ -110,7 +107,6 @@
       letter-spacing: 0.5px;
     }
 
-    /* ZOOM MYGTUKAI (1x, 2x, 3x) */
     .zoom-bar {
       position: absolute;
       bottom: 12px;
@@ -143,7 +139,6 @@
       color: #fff;
     }
 
-    /* 3. APAČIA: Fiksavimo mygtukas */
     .bottom-bar {
       flex: 0 0 84px;
       display: flex;
@@ -185,7 +180,6 @@
       cursor: not-allowed;
     }
 
-    /* Bakstelėjimo fokusavimo žiedas */
     .focus-ring {
       position: absolute;
       width: 50px;
@@ -202,7 +196,6 @@
 </head>
 <body>
 
-  <!-- VIRŠUS -->
   <div class="top-bar">
     <div class="tool-group">
       <button id="torch-btn" class="tool-btn" onclick="toggleTorch()">
@@ -217,11 +210,9 @@
     </div>
   </div>
 
-  <!-- CENTRAS -->
   <div class="camera-container" id="camera-container" onclick="handleTapToFocus(event)">
     <video id="video" autoplay playsinline muted></video>
     
-    <!-- Taikiklis -->
     <div class="target-box" id="target-box">
       <div style="width:100%; display:flex; justify-content:space-between;">
         <span style="border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6; width: 14px; height: 14px;"></span>
@@ -234,7 +225,6 @@
       </div>
     </div>
 
-    <!-- Zoom mygtukai (1x, 2x, 3x) -->
     <div class="zoom-bar" id="zoom-bar" style="display:none;">
       <button class="btn-zoom active" id="zoom-1x" onclick="setZoom(1, event)">1x</button>
       <button class="btn-zoom" id="zoom-2x" onclick="setZoom(2, event)">2x</button>
@@ -244,7 +234,6 @@
     <div class="focus-ring" id="focus-ring"></div>
   </div>
 
-  <!-- APAČIA -->
   <div class="bottom-bar">
     <button id="btn-capture" class="btn-capture" onclick="captureAndCrop()">
       <span class="material-symbols-outlined" style="font-size:24px;">photo_camera</span>
@@ -259,12 +248,12 @@
     let isTorch = false;
     let isAntiGlare = false;
 
-    // 1. Paleidžiame kamerą su didžiausia sensoriaus raiška
+    // Saugus paleidimas be kietų 'min' parametrų
     navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 3840, min: 1920 },
-        height: { ideal: 2160, min: 1080 }
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
       }
     })
     .then(stream => {
@@ -273,17 +262,14 @@
       track = stream.getVideoTracks()[0];
       capabilities = track.getCapabilities ? track.getCapabilities() : {};
 
-      // Sukuriame ImageCapture objektą tikrai pilnos raiškos sensoriaus nuotraukai
       if ('ImageCapture' in window) {
         try { imageCapture = new ImageCapture(track); } catch(e){}
       }
 
-      // Nuolatinis autofokusas
       if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
         track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(()=>{});
       }
 
-      // Zoom mygtukai (1x, 2x, 3x)
       if (capabilities.zoom) {
         document.getElementById('zoom-bar').style.display = 'flex';
         const maxZ = capabilities.zoom.max || 1;
@@ -295,7 +281,6 @@
       alert("Klaida pasiekiant kamerą: " + err.message);
     });
 
-    // 2. Prožektoriaus valdymas (pagal nutylėjimą IŠJUNGTAS)
     async function toggleTorch() {
       if (!track || !capabilities.torch) {
         alert("Šio įrenginio kamera nepalaiko prožektoriaus.");
@@ -310,7 +295,6 @@
       }
     }
 
-    // 3. Atspindžių / Ekspozicijos valdymas (EV -)
     async function toggleAntiGlare() {
       if (!track) return;
       isAntiGlare = !isAntiGlare;
@@ -318,7 +302,6 @@
       const btn = document.getElementById('glare-btn');
       btn.classList.toggle('active-glare', isAntiGlare);
 
-      // Jei aparatinė įranga palaiko EV (exposure compensation)
       if (capabilities.exposureCompensation) {
         const minEv = capabilities.exposureCompensation.min || -2;
         const targetEv = isAntiGlare ? Math.max(minEv, -1.5) : 0;
@@ -326,12 +309,10 @@
           await track.applyConstraints({ advanced: [{ exposureCompensation: targetEv }] });
         } catch(e) {}
       } else {
-        // Programinis pritemdymas, jei sensorius nepalaiko EV tiesiogiai
         document.getElementById('video').style.filter = isAntiGlare ? 'brightness(0.75) contrast(1.3)' : '';
       }
     }
 
-    // 4. Zoom nustatymas (1x, 2x, 3x)
     async function setZoom(level, e) {
       if (e) e.stopPropagation();
       if (!track || !capabilities.zoom) return;
@@ -345,7 +326,6 @@
       } catch(err) {}
     }
 
-    // 5. Bakstelėjimas ekrane fokusavimui
     function handleTapToFocus(e) {
       const ring = document.getElementById('focus-ring');
       ring.style.left = e.clientX + 'px';
@@ -363,7 +343,6 @@
       }
     }
 
-    // 6. TIKRA SENSORIAUS NUOTRAUKA + TIKSLUS CROP PAGAL TAIKIKLĮ
     async function captureAndCrop() {
       const btn = document.getElementById('btn-capture');
       const label = document.getElementById('capture-label');
@@ -373,17 +352,17 @@
       try {
         let sourceImg = null;
 
-        // 1 Žingsnis: Gauname pilnos sensoriaus raiškos kadrą
+        // 1. Pilnos raiškos sensoriaus nuotrauka
         if (imageCapture) {
           try {
             const photoBlob = await imageCapture.takePhoto();
             sourceImg = await createImageBitmap(photoBlob);
           } catch(e) {
-            console.warn("ImageCapture takePhoto nepavyko, naudojamas video kadras:", e);
+            console.warn("ImageCapture nepavyko, imamas video kadras:", e);
           }
         }
 
-        // Atsarginis variantas (jei ImageCapture nesuveikė)
+        // Atsarginis: video karkaso kadras
         if (!sourceImg) {
           const video = document.getElementById('video');
           const vCanvas = document.createElement('canvas');
@@ -394,7 +373,7 @@
           sourceImg = await createImageBitmap(vCanvas);
         }
 
-        // 2 Žingsnis: Apskaičiuojame taikiklio koordinates vaizde (įvertinant object-fit: cover)
+        // 2. Apkirpimas pagal taikiklį
         const videoEl = document.getElementById('video');
         const targetEl = document.getElementById('target-box');
 
@@ -404,7 +383,6 @@
         const imgW = sourceImg.width;
         const imgH = sourceImg.height;
 
-        // Mastelis tarp ekrano ir tikro vaizdo
         const scale = Math.max(vRect.width / imgW, vRect.height / imgH);
         const displayedW = imgW * scale;
         const displayedH = imgH * scale;
@@ -412,13 +390,12 @@
         const offsetX = (vRect.width - displayedW) / 2;
         const offsetY = (vRect.height - displayedH) / 2;
 
-        // Taikiklio koordinatės tikrame vaizde
         let cropX = (tRect.left - vRect.left - offsetX) / scale;
         let cropY = (tRect.top - vRect.top - offsetY) / scale;
         let cropW = tRect.width / scale;
         let cropH = tRect.height / scale;
 
-        // Pridedame saugią +15% atsargą aplink taikiklį, kad nenukirptų IMEI kraštų
+        // +15% saugos atsarga
         const padX = cropW * 0.15;
         const padY = cropH * 0.15;
 
@@ -427,7 +404,6 @@
         cropW = Math.min(imgW - cropX, cropW + padX * 2);
         cropH = Math.min(imgH - cropY, cropH + padY * 2);
 
-        // 3 Žingsnis: Iškerpame tik šią dalį į naują drobę
         const cropCanvas = document.createElement('canvas');
         cropCanvas.width = cropW;
         cropCanvas.height = cropH;
@@ -439,7 +415,6 @@
           0, 0, cropW, cropH
         );
 
-        // 4 Žingsnis: Siunčiame iškarpytą nuotrauką atgal į Google Apps Script
         const croppedBase64 = cropCanvas.toDataURL('image/jpeg', 0.95);
 
         if (window.opener) {
