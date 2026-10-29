@@ -60,10 +60,10 @@
       border-color: #fbbf24;
     }
 
-    .tool-btn.active-glare {
-      background: #3b82f6;
-      color: #fff;
-      border-color: #3b82f6;
+    .tool-btn.active-bright {
+      background: #38bdf8;
+      color: #0f172a;
+      border-color: #38bdf8;
     }
 
     /* 2. CENTRAS: Kamera ir Taikiklis */
@@ -82,15 +82,15 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      transition: filter 0.2s ease;
     }
 
-    /* TAIKIKLIS SU STABILUMO BŪSENOMIS */
     .target-box {
       position: absolute;
-      width: 82%;
-      max-width: 340px;
+      width: 84%;
+      max-width: 350px;
       height: 28%;
-      border: 2px dashed #3b82f6;
+      border: 2px dashed #38bdf8;
       border-radius: 12px;
       box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
       pointer-events: none;
@@ -103,7 +103,6 @@
       transition: border-color 0.2s ease;
     }
 
-    /* Kai telefonas stabilus – žalia spalva */
     .target-box.stable {
       border-color: #10b981 !important;
       border-style: solid !important;
@@ -114,7 +113,7 @@
     }
 
     .target-text {
-      color: #93c5fd;
+      color: #bae6fd;
       font-size: 12px;
       font-weight: 600;
       text-shadow: 0 1px 3px rgba(0,0,0,0.9);
@@ -132,7 +131,7 @@
     .corner {
       width: 14px;
       height: 14px;
-      border-color: #3b82f6;
+      border-color: #38bdf8;
       transition: border-color 0.2s ease;
     }
 
@@ -235,9 +234,10 @@
         <span>Prožektorius</span>
       </button>
 
-      <button id="glare-btn" class="tool-btn" onclick="toggleAntiGlare()">
-        <span class="material-symbols-outlined" style="font-size:18px;">brightness_medium</span>
-        <span>Atspindžiai</span>
+      <!-- PAKEISTA: Pašviesinimas tamsiems paviršiams -->
+      <button id="bright-btn" class="tool-btn" onclick="toggleBrighten()">
+        <span class="material-symbols-outlined" style="font-size:18px;">brightness_high</span>
+        <span>Pašviesinti</span>
       </button>
     </div>
   </div>
@@ -246,11 +246,10 @@
   <div class="camera-container" id="camera-container" onclick="handleTapToFocus(event)">
     <video id="video" autoplay playsinline muted></video>
     
-    <!-- Taikiklis su būsenos tekstu -->
     <div class="target-box" id="target-box">
       <div style="width:100%; display:flex; justify-content:space-between;">
-        <span class="corner" style="border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6;"></span>
-        <span class="corner" style="border-top: 2px solid #3b82f6; border-right: 2px solid #3b82f6;"></span>
+        <span class="corner" style="border-top: 2px solid #38bdf8; border-left: 2px solid #38bdf8;"></span>
+        <span class="corner" style="border-top: 2px solid #38bdf8; border-right: 2px solid #38bdf8;"></span>
       </div>
       
       <span class="target-text" id="target-text">
@@ -259,12 +258,12 @@
       </span>
 
       <div style="width:100%; display:flex; justify-content:space-between;">
-        <span class="corner" style="border-bottom: 2px solid #3b82f6; border-left: 2px solid #3b82f6;"></span>
-        <span class="corner" style="border-bottom: 2px solid #3b82f6; border-right: 2px solid #3b82f6;"></span>
+        <span class="corner" style="border-bottom: 2px solid #38bdf8; border-left: 2px solid #38bdf8;"></span>
+        <span class="corner" style="border-bottom: 2px solid #38bdf8; border-right: 2px solid #38bdf8;"></span>
       </div>
     </div>
 
-    <!-- Zoom mygtukai (1x, 2x, 3x) -->
+    <!-- Zoom mygtukai -->
     <div class="zoom-bar" id="zoom-bar" style="display:none;">
       <button class="btn-zoom active" id="zoom-1x" onclick="setZoom(1, event)">1x</button>
       <button class="btn-zoom" id="zoom-2x" onclick="setZoom(2, event)">2x</button>
@@ -284,20 +283,17 @@
 
   <script>
     let track = null;
-    let imageCapture = null;
     let capabilities = {};
     let isTorch = false;
-    let isAntiGlare = false;
+    let isBrighten = false;
 
-    // DREBĖJIMO / STABILUMO KINTAMIEJI
     let isStable = false;
-    let lastMotionMagnitude = 0;
     let stableStartTime = 0;
     let captureRequested = false;
-    const MOTION_THRESHOLD = 0.55; // Jautrumo slenkstis (m/s²)
-    const REQUIRED_STABLE_MS = 200; // Kiek ms ranka turi nejudėti
+    const MOTION_THRESHOLD = 0.55;
+    const REQUIRED_STABLE_MS = 200;
 
-    // 1. Paleidžiame kamerą
+    // 1. Paleidžiame kameros vaizdą Full HD raiška
     navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: "environment" },
@@ -311,10 +307,6 @@
       track = stream.getVideoTracks()[0];
       capabilities = track.getCapabilities ? track.getCapabilities() : {};
 
-      if ('ImageCapture' in window) {
-        try { imageCapture = new ImageCapture(track); } catch(e){}
-      }
-
       if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
         track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(()=>{});
       }
@@ -326,43 +318,29 @@
         if (maxZ < 3) document.getElementById('zoom-3x').style.display = 'none';
       }
 
-      // Paleidžiame drebėjimo stebėjimą
       initStabilitySensor();
     })
     .catch(err => {
       alert("Klaida pasiekiant kamerą: " + err.message);
     });
 
-    // 2. AKSILEROMETRO / DREBĖJIMO FILTRAS
+    // 2. Akselerometras / Stabilumas
     function initStabilitySensor() {
       let lastGrav = null;
 
       window.addEventListener('devicemotion', (e) => {
         let mag = 0;
-
-        // Jei yra tikrasis akseleracijos vektorius (be gravitacijos)
         if (e.acceleration && e.acceleration.x !== null) {
-          mag = Math.sqrt(
-            Math.pow(e.acceleration.x, 2) +
-            Math.pow(e.acceleration.y, 2) +
-            Math.pow(e.acceleration.z, 2)
-          );
+          mag = Math.sqrt(Math.pow(e.acceleration.x, 2) + Math.pow(e.acceleration.y, 2) + Math.pow(e.acceleration.z, 2));
         } else if (e.accelerationIncludingGravity) {
-          // Fallback: apskaičiuojame gravitacijos vektoriaus pokyčio greitį
           const g = e.accelerationIncludingGravity;
           if (lastGrav) {
-            mag = Math.sqrt(
-              Math.pow(g.x - lastGrav.x, 2) +
-              Math.pow(g.y - lastGrav.y, 2) +
-              Math.pow(g.z - lastGrav.z, 2)
-            );
+            mag = Math.sqrt(Math.pow(g.x - lastGrav.x, 2) + Math.pow(g.y - lastGrav.y, 2) + Math.pow(g.z - lastGrav.z, 2));
           }
           lastGrav = { x: g.x, y: g.y, z: g.z };
         }
 
         const now = Date.now();
-
-        // Jei viršytas judesio slenkstis – ranka virpa
         if (mag > MOTION_THRESHOLD) {
           stableStartTime = now;
           if (isStable) {
@@ -370,12 +348,9 @@
             updateStabilityUI(false);
           }
         } else {
-          // Jei rami būsena trunka bent REQUIRED_STABLE_MS
           if (!isStable && (now - stableStartTime) >= REQUIRED_STABLE_MS) {
             isStable = true;
             updateStabilityUI(true);
-
-            // Jei vartotojas jau paspaudė mygtuką ir laukia stabilaus momento
             if (captureRequested) {
               captureRequested = false;
               executeCapture();
@@ -398,28 +373,23 @@
       }
     }
 
-    // 3. IŠMANUSIS MYGTUKO PASPAUDIMAS
     function requestCapture() {
-      // Ryšio patikrinimas prieš pradedant
       if (!window.opener || window.opener.closed) {
-        alert("Ryšys su pagrindine programa nutrūko. Uždarykite šį langą ir atidarykite iš naujo iš programos.");
+        alert("Ryšys su pagrindine programa nutrūko. Uždarykite šį langą ir atidarykite iš naujo.");
         return;
       }
 
-      // Jei ranka jau stabili – fotografuojame akimirksniu
       if (isStable) {
         executeCapture();
         return;
       }
 
-      // Jei ranka dar virpa – laukiame stabilumo
       captureRequested = true;
       const btn = document.getElementById('btn-capture');
       const label = document.getElementById('capture-label');
       btn.classList.add('waiting');
       label.innerText = 'Laukiama stabilumo...';
 
-      // Saugiklis: jei per 2 sekundes telefonas nesustojo, vis tiek fiksuojame
       setTimeout(() => {
         if (captureRequested) {
           captureRequested = false;
@@ -428,45 +398,31 @@
       }, 2000);
     }
 
-    // 4. KADRO FIKSAVIMAS IR APDIRBIMAS
+    // 3. Fiksavimas tiesiai iš ekrano (WYSWYG) + Adaptyvus ryškinimas
     async function executeCapture() {
       const btn = document.getElementById('btn-capture');
       const label = document.getElementById('capture-label');
       btn.disabled = true;
       btn.classList.remove('waiting');
-      label.innerText = 'Kerpama ir siunčiama...';
+      label.innerText = 'Ryškinama ir siunčiama...';
 
       try {
-        let sourceImg = null;
+        const video = document.getElementById('video');
 
-        if (imageCapture) {
-          try {
-            const photoBlob = await imageCapture.takePhoto({ imageWidth: 1920, imageHeight: 1080 });
-            sourceImg = await createImageBitmap(photoBlob);
-          } catch(e) {
-            console.warn("ImageCapture nepavyko, imamas video kadras:", e);
-          }
-        }
-
-        if (!sourceImg) {
-          const video = document.getElementById('video');
-          const vCanvas = document.createElement('canvas');
-          vCanvas.width = video.videoWidth;
-          vCanvas.height = video.videoHeight;
-          const vCtx = vCanvas.getContext('2d');
-          vCtx.drawImage(video, 0, 0);
-          sourceImg = await createImageBitmap(vCanvas);
-        }
+        // Paimamas TIKSLIAI toks vaizdas, kokį matote ekrane
+        const vCanvas = document.createElement('canvas');
+        vCanvas.width = video.videoWidth;
+        vCanvas.height = video.videoHeight;
+        const vCtx = vCanvas.getContext('2d');
+        vCtx.drawImage(video, 0, 0);
 
         // Taikiklio koordinačių apskaičiavimas
-        const videoEl = document.getElementById('video');
         const targetEl = document.getElementById('target-box');
-
-        const vRect = videoEl.getBoundingClientRect();
+        const vRect = video.getBoundingClientRect();
         const tRect = targetEl.getBoundingClientRect();
 
-        const imgW = sourceImg.width;
-        const imgH = sourceImg.height;
+        const imgW = vCanvas.width;
+        const imgH = vCanvas.height;
 
         const scale = Math.max(vRect.width / imgW, vRect.height / imgH);
         const displayedW = imgW * scale;
@@ -480,28 +436,28 @@
         let cropW = tRect.width / scale;
         let cropH = tRect.height / scale;
 
-        const padX = cropW * 0.15;
-        const padY = cropH * 0.15;
+        const padX = cropW * 0.12;
+        const padY = cropH * 0.12;
 
         cropX = Math.max(0, cropX - padX);
         cropY = Math.max(0, cropY - padY);
         cropW = Math.min(imgW - cropX, cropW + padX * 2);
         cropH = Math.min(imgH - cropY, cropH + padY * 2);
 
+        // Iškerpama taikiklio sritis
         const cropCanvas = document.createElement('canvas');
         cropCanvas.width = cropW;
         cropCanvas.height = cropH;
         const cropCtx = cropCanvas.getContext('2d');
 
-        cropCtx.drawImage(
-          sourceImg,
-          cropX, cropY, cropW, cropH,
-          0, 0, cropW, cropH
-        );
+        cropCtx.drawImage(vCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-        const croppedBase64 = cropCanvas.toDataURL('image/jpeg', 0.92);
+        // PRAMONINIS RYŠKINIMAS: Auto-Levels + Gamma šviesinimas tamsiems paviršiams
+        enhanceForDarkSurfaces(cropCtx, cropW, cropH);
 
-        window.opener.postMessage({ type: 'CAMERA_IMAGE', data: croppedBase64 }, '*');
+        const enhancedBase64 = cropCanvas.toDataURL('image/jpeg', 0.95);
+
+        window.opener.postMessage({ type: 'CAMERA_IMAGE', data: enhancedBase64 }, '*');
         window.close();
 
       } catch (err) {
@@ -511,10 +467,56 @@
       }
     }
 
-    // 5. Pagalbinės funkcijos (Prožektorius, Atspindžiai, Zoom, Fokusas)
+    // 4. Adaptyvus histogramos ištempimas (iškelia graviruotus skaičius iš tamsaus fono)
+    function enhanceForDarkSurfaces(ctx, width, height) {
+      const imgData = ctx.getImageData(0, 0, width, height);
+      const data = imgData.data;
+
+      let hist = new Int32Array(256);
+      for (let i = 0; i < data.length; i += 4) {
+        let gray = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+        hist[gray]++;
+      }
+
+      // Atmetame 3% kraštutinumų (prožektoriaus atspindžius ir gilius šešėlius)
+      const totalPixels = data.length / 4;
+      const lowBound = totalPixels * 0.03;
+      const highBound = totalPixels * 0.97;
+
+      let acc = 0;
+      let minVal = 0, maxVal = 255;
+      for (let i = 0; i < 256; i++) {
+        acc += hist[i];
+        if (acc >= lowBound && minVal === 0) minVal = i;
+        if (acc >= highBound) { maxVal = i; break; }
+      }
+      if (maxVal <= minVal) { minVal = 0; maxVal = 255; }
+
+      const range = maxVal - minVal;
+      const lut = new Uint8Array(256);
+
+      // Gamma 0.75 pakelia tamsius pustonius, padarydama lazerinius griovelius ryškiai baltus
+      for (let i = 0; i < 256; i++) {
+        let norm = Math.max(0, Math.min(255, ((i - minVal) / range) * 255));
+        norm = Math.pow(norm / 255, 0.75) * 255;
+        lut[i] = Math.round(norm);
+      }
+
+      for (let i = 0; i < data.length; i += 4) {
+        let gray = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+        let val = lut[gray];
+        data[i] = val;
+        data[i+1] = val;
+        data[i+2] = val;
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    // 5. Prožektoriaus valdymas
     async function toggleTorch() {
       if (!track || !capabilities.torch) {
-        alert("Šio įrenginio kamera nepalaiko prožektoriaus.");
+        alert("Prožektorius nepalaikomas šioje kameroje.");
         return;
       }
       isTorch = !isTorch;
@@ -524,24 +526,26 @@
       } catch (e) {}
     }
 
-    async function toggleAntiGlare() {
+    // 6. Papildomas pašviesinimas tamsiems dangteliams
+    async function toggleBrighten() {
       if (!track) return;
-      isAntiGlare = !isAntiGlare;
+      isBrighten = !isBrighten;
 
-      const btn = document.getElementById('glare-btn');
-      btn.classList.toggle('active-glare', isAntiGlare);
+      const btn = document.getElementById('bright-btn');
+      btn.classList.toggle('active-bright', isBrighten);
 
       if (capabilities.exposureCompensation) {
-        const minEv = capabilities.exposureCompensation.min || -2;
-        const targetEv = isAntiGlare ? Math.max(minEv, -1.5) : 0;
+        const maxEv = capabilities.exposureCompensation.max || 2;
+        const targetEv = isBrighten ? Math.min(maxEv, 1.5) : 0;
         try {
           await track.applyConstraints({ advanced: [{ exposureCompensation: targetEv }] });
         } catch(e) {}
       } else {
-        document.getElementById('video').style.filter = isAntiGlare ? 'brightness(0.75) contrast(1.3)' : '';
+        document.getElementById('video').style.filter = isBrighten ? 'brightness(1.35) contrast(1.15)' : '';
       }
     }
 
+    // 7. Zoom nustatymas
     async function setZoom(level, e) {
       if (e) e.stopPropagation();
       if (!track || !capabilities.zoom) return;
